@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin Portal - Attendance</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in { animation: fadeIn 0.8s ease-out; }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col">
+
+<header class="bg-black text-white shadow sticky top-0 z-50">
+  <div class="w-full px-4 sm:px-6 lg:px-8 py-2">
+    <div class="flex justify-center items-center space-x-3">
+      <img src="logo.png" alt="Logo" class="h-12 w-12 object-contain"/>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 100" preserveAspectRatio="xMidYMid meet" class="h-6 sm:h-8 md:h-10 lg:h-12 w-auto">
+        <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle"
+              class="font-extrabold tracking-wider uppercase"
+              fill="url(#gradient)" font-size="40">
+          Dravida Munnetra Kazhagam
+        </text>
+        <defs>
+          <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#ef4444"/>
+            <stop offset="100%" stop-color="#fca5a5"/>
+          </linearGradient>
+        </defs>
+      </svg>
+    </div>
+  </div>
+</header>
+
+<div class="w-full flex justify-end pr-4 pt-2">
+  <button id="logoutBtn" class="hidden bg-red-600 text-white font-semibold py-1 px-4 rounded hover:bg-red-700">
+    Logout
+  </button>
+</div>
+
+<main class="flex-1 max-w-4xl mx-auto px-4 py-8">
+  <!-- Login -->
+  <div id="loginSection"
+       class="fade-in bg-gradient-to-br from-black via-gray-900 to-red-900 shadow-xl rounded-2xl p-10 w-full max-w-lg mx-auto mt-20 transform transition duration-300 hover:scale-105">
+    <h2 class="text-2xl font-bold text-center text-white mb-6 tracking-wide">Admin Login</h2>
+    <div class="flex flex-col gap-5">
+      <input type="text" id="username" placeholder="Username"
+             class="border border-gray-600 bg-black text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-red-600"/>
+      <input type="password" id="password" placeholder="Password"
+             class="border border-gray-600 bg-black text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-red-600"/>
+      <button id="loginBtn"
+              class="bg-red-600 text-white font-semibold py-3 rounded-lg hover:bg-red-700 transition-all duration-300 shadow-lg">
+        Login
+      </button>
+      <p id="loginMsg" class="text-sm text-red-300 text-center"></p>
+    </div>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dashboard" class="hidden">
+    <div class="bg-white shadow rounded-xl p-6 mb-6 text-center">
+      <h2 class="text-xl font-semibold mb-4">Scan User QR Code</h2>
+      <div id="qr-reader" class="w-full mx-auto" style="max-width:400px; height:250px;"></div>
+    </div>
+
+    <div id="userDetails" class="bg-white shadow rounded-xl p-6 hidden">
+      <h3 class="text-lg font-semibold mb-4">User Details</h3>
+      <div class="grid md:grid-cols-2 gap-4 mb-4" id="detailsGrid"></div>
+      <div class="text-center">
+        <button id="markAttendanceBtn" class="hidden bg-green-600 text-white font-semibold py-2 px-6 rounded hover:bg-green-700">Yes, Mark Attendance</button>
+        <p id="attendanceMsg" class="text-sm text-green-600 mt-2"></p>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div id="loadingSpinner" class="fixed inset-0 bg-gray-800 bg-opacity-50 flex items-center justify-center hidden z-50">
+  <div class="bg-white p-5 rounded-lg flex items-center">
+    <svg class="animate-spin h-6 w-6 text-red-600 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+    </svg>
+    <span>Processing...</span>
+  </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwnOXsmPj2Fe_pjIw7AX_PjAWTSKU6y88Phs7ty6z3HI5JvRg1IABr8E11S_3Ee8RYr/exec";
+
+  const loginSection = document.getElementById("loginSection");
+  const dashboard = document.getElementById("dashboard");
+  const loginBtn = document.getElementById("loginBtn");
+  const logoutBtn = document.getElementById("logoutBtn");
+  const loginMsg = document.getElementById("loginMsg");
+  const userDetailsDiv = document.getElementById("userDetails");
+  const detailsGrid = document.getElementById("detailsGrid");
+  const markAttendanceBtn = document.getElementById("markAttendanceBtn");
+  const attendanceMsg = document.getElementById("attendanceMsg");
+  const loadingSpinner = document.getElementById("loadingSpinner");
+  let html5QrcodeScanner;
+  let currentUserId = null;
+
+  function showLoading(){ loadingSpinner.classList.remove("hidden"); }
+  function hideLoading(){ loadingSpinner.classList.add("hidden"); }
+
+  function postToScript(params) {
+    return new Promise((resolve, reject) => {
+      showLoading();
+      const callback = "cb" + Date.now();
+      window[callback] = function (data) {
+        hideLoading();
+        resolve(data);
+        delete window[callback];
+        script.remove();
+      };
+      const query = new URLSearchParams({ ...params, callback });
+      const script = document.createElement("script");
+      script.src = SCRIPT_URL + "?" + query.toString();
+      script.onerror = () => { hideLoading(); reject("Request failed"); };
+      document.body.appendChild(script);
+    });
+  }
+
+  loginBtn.addEventListener("click", async () => {
+    const username = document.getElementById("username").value.trim();
+    const password = document.getElementById("password").value.trim();
+    loginMsg.textContent = "";
+    const data = await postToScript({ path:"login", username, password });
+    if (data.success) {
+      loginSection.classList.add("hidden");
+      dashboard.classList.remove("hidden");
+      logoutBtn.classList.remove("hidden");
+      startQRScanner();
+    } else {
+      loginMsg.textContent = "Invalid username or password";
+    }
+  });
+
+  logoutBtn.addEventListener("click", () => {
+    loginSection.classList.remove("hidden");
+    dashboard.classList.add("hidden");
+    userDetailsDiv.classList.add("hidden");
+    logoutBtn.classList.add("hidden");
+    if(html5QrcodeScanner){
+      html5QrcodeScanner.stop().catch(()=>{});
+      html5QrcodeScanner.clear();
+    }
+  });
+
+  function startQRScanner(){
+    if (!window.Html5Qrcode) { alert("QR Scanner library failed to load"); return; }
+    html5QrcodeScanner = new Html5Qrcode("qr-reader");
+    Html5Qrcode.getCameras().then(cameras => {
+      if(cameras && cameras.length){
+        html5QrcodeScanner.start(
+          cameras[0].id,
+          { fps: 10, qrbox: 250 },
+          qrCodeMessage => { 
+            try {
+              const url = new URL(qrCodeMessage);
+              const id = url.searchParams.get("id");
+              if(id){ fetchUser(id); }
+            } catch { console.warn("Invalid QR content", qrCodeMessage); }
+          }
+        ).catch(()=>{ alert("Error starting QR scanner"); });
+      } else { alert("No camera found"); }
+    });
+  }
+
+  async function fetchUser(id){
+    const res = await postToScript({ path:"user", id });
+    if(!res.success || !res.data){ alert("User not found"); return; }
+    currentUserId = id;
+    const user = res.data;
+
+    detailsGrid.innerHTML = "";
+    const allowedFields = [
+      "ID","NAME","PHONE","EMAIL","DISTRICT","ZONE","MANDAL",
+      "DESIGNATION","REPORTS_TO","REFFERED_BY","ACTIVE_FROM"
+    ];
+    allowedFields.forEach(field=>{
+      if(user[field]){
+        const label = field.replace(/_/g," ").toLowerCase().replace(/\b\w/g,c=>c.toUpperCase());
+        detailsGrid.innerHTML += `<div class="p-3 bg-gray-100 rounded shadow text-left"><b>${label}:</b> ${user[field]}</div>`;
+      }
+    });
+
+    // ---- Check ATTENDED & TIMESTAMP fields ----
+    if(user.ATTENDED === "Y" && user.TIMESTAMP){
+      attendanceMsg.textContent = "✅ Already marked at " + user.TIMESTAMP;
+      markAttendanceBtn.classList.add("hidden");
+    } else {
+      attendanceMsg.textContent = "";
+      markAttendanceBtn.classList.remove("hidden");
+    }
+
+    userDetailsDiv.classList.remove("hidden");
+  }
+
+  markAttendanceBtn.addEventListener("click", async () => {
+    if(!currentUserId) return;
+    const timestamp = new Date().toLocaleString(); // date + time
+    const data = await postToScript({ path:"mark", id: currentUserId, attended:"Y", timestamp });
+    if(data.success){
+      attendanceMsg.textContent = "✅ Already marked at " + timestamp;
+      markAttendanceBtn.classList.add("hidden");
+    } else {
+      attendanceMsg.textContent = "Error marking attendance";
+    }
+  });
+
+});
+</script>
+
+</body>
+</html>
